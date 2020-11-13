@@ -80,7 +80,7 @@ namespace Google.Protobuf
         /// </summary>
         private ParserInternalState state;
 
-        internal const int DefaultRecursionLimit = 100;
+        internal const int DefaultRecursionLimit = 1000;
         internal const int DefaultSizeLimit = Int32.MaxValue;
         internal const int BufferSize = 4096;
 
