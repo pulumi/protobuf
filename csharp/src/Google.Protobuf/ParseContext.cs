@@ -1,4 +1,4 @@
-﻿#region Copyright notice and license
+#region Copyright notice and license
 // Protocol Buffers - Google's data interchange format
 // Copyright 2008 Google Inc.  All rights reserved.
 // https://developers.google.com/protocol-buffers/
@@ -52,7 +52,7 @@ namespace Google.Protobuf
     [SecuritySafeCritical]
     public ref struct ParseContext
     {
-        internal const int DefaultRecursionLimit = 100;
+        internal const int DefaultRecursionLimit = 1000;
         internal const int DefaultSizeLimit = Int32.MaxValue;
 
         internal ReadOnlySpan<byte> buffer;
