@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: PHP Extension Tests
 
 on:
@@ -5,8 +11,8 @@ on:
     inputs:
       continuous-run:
         required: true
-        description: "Boolean string denoting whether this run is continuous --
-          empty string for presubmit, non-empty string for continuous."
+        description: "Boolean string denoting whether this run is continuous -- empty string for presubmit, non-empty string for continuous."
+
         type: string
       safe-checkout:
         required: true
@@ -14,19 +20,22 @@ on:
         type: string
       continuous-prefix:
         required: true
-        description: "The string continuous-only tests should be prefixed with when displaying test
-          results."
+        description: "The string continuous-only tests should be prefixed with when displaying test results."
+
         type: string
 
-
 permissions:
-  contents: read  #  to fetch code (actions/checkout)
+  contents: read #  to fetch code (actions/checkout)
+  id-token: write
 
 jobs:
   package:
     name: Package
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -35,13 +44,12 @@ jobs:
       - name: Package extension
         uses: protocolbuffers/protobuf-ci/bazel@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: php_ext/${{ matrix.version }}
           bash: >
             ./regenerate_stale_files.sh $BAZEL_FLAGS;
             bazel build //php:release $BAZEL_FLAGS;
             cp bazel-bin/php/protobuf-*.tgz .
-
       - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
         with:
           name: protobuf-php-release
@@ -50,7 +58,7 @@ jobs:
   build:
     needs: [package]
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         include:
           - version: "8.1"
@@ -61,6 +69,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} Build ${{ matrix.version }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         with:
@@ -71,6 +82,6 @@ jobs:
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/php-extension:${{ matrix.version }}-a48f26c08d9a803dd0177dda63563f6ea6f7b2d4
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           skip-staleness-check: true
           command: protobuf-*.tgz

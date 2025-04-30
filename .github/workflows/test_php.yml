@@ -1,13 +1,18 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: PHP Tests
-
 
 on:
   workflow_call:
     inputs:
       continuous-run:
         required: true
-        description: "Boolean string denoting whether this run is continuous --
-          empty string for presubmit, non-empty string for continuous."
+        description: "Boolean string denoting whether this run is continuous -- empty string for presubmit, non-empty string for continuous."
+
         type: string
       safe-checkout:
         required: true
@@ -15,18 +20,18 @@ on:
         type: string
       continuous-prefix:
         required: true
-        description: "The string continuous-only tests should be prefixed with when displaying test
-          results."
-        type: string
+        description: "The string continuous-only tests should be prefixed with when displaying test results."
 
+        type: string
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   linux:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         include:
           - name: 8.1 Optimized
@@ -57,6 +62,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} Linux ${{ matrix.name}}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -73,16 +81,16 @@ jobs:
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/php:${{ matrix.version }}-66964dc8b07b6d1fc73a5cc14e59e84c1c534cea
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           extra-flags: -e COMPOSER_HOME=/workspace/composer-cache
           command: ${{ matrix.command }}
 
   linux-32bit:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         version: ['8.1']
-        suffix: [ '', '-zts']
+        suffix: ['', '-zts']
         test: ['test', 'test_c']
         exclude:
           - suffix: '-zts'
@@ -102,6 +110,9 @@ jobs:
     env:
       image: us-docker.pkg.dev/protobuf-build/containers/test/linux/32bit@sha256:836f2cedcfe351d9a30055076630408e61994fc7d783e8333a99570968990eeb
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -114,7 +125,7 @@ jobs:
         uses: protocolbuffers/protobuf-ci/cross-compile-protoc@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/common/linux/bazel:6.3.0-91a0ac83e968068672bc6001a4d474cfd9a50f1d
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           architecture: linux-i386
 
       - name: Setup composer
@@ -130,7 +141,7 @@ jobs:
         with:
           image: ${{ env.image }}
           platform: linux/386
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           extra-flags: -e COMPOSER_HOME=/workspace/composer-cache -e PROTOC=/workspace/${{ steps.cross-compile.outputs.protoc }}
           command: >-
             /bin/bash -cex '
@@ -138,11 +149,13 @@ jobs:
             cd php && php -v && php -m;
             composer update --ignore-platform-reqs;
             composer ${{ matrix.test }}'
-
   linux-aarch64:
     name: Linux aarch64
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -153,7 +166,7 @@ jobs:
         uses: protocolbuffers/protobuf-ci/cross-compile-protoc@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/common/linux/bazel:6.3.0-91a0ac83e968068672bc6001a4d474cfd9a50f1d
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           architecture: linux-aarch64
 
       - name: Setup composer
@@ -167,7 +180,7 @@ jobs:
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/php-aarch64@sha256:77ff9fdec867bbfb290ee0b10d8b7a3e5e434155daa5ec93de7341c7592b858d
           platform: linux/arm64
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           extra-flags: -e COMPOSER_HOME=/workspace/composer-cache -e PROTOC=/workspace/${{ steps.cross-compile.outputs.protoc }}
           command: >-
             -c '
@@ -175,10 +188,9 @@ jobs:
             composer update --ignore-platform-reqs;
             composer test;
             composer test_c'
-
   macos:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         include:
           - version: '8.2'
@@ -188,6 +200,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} MacOS PHP ${{ matrix.version }}
     runs-on: macos-12
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -223,7 +238,7 @@ jobs:
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/bash@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: |
             pushd php
             php -v
@@ -236,6 +251,6 @@ jobs:
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/bazel@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: php_macos/${{ matrix.version }}
           bazel: test //php:conformance_test_c --action_env=PATH --test_env=PATH

@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: C++ Tests
 
 on:
@@ -5,8 +11,8 @@ on:
     inputs:
       continuous-run:
         required: true
-        description: "Boolean string denoting whether this run is continuous --
-          empty string for presubmit, non-empty string for continuous."
+        description: "Boolean string denoting whether this run is continuous -- empty string for presubmit, non-empty string for continuous."
+
         type: string
       safe-checkout:
         required: true
@@ -14,52 +20,55 @@ on:
         type: string
       continuous-prefix:
         required: true
-        description: "The string continuous-only tests should be prefixed with when displaying test
-          results."
-        type: string
+        description: "The string continuous-only tests should be prefixed with when displaying test results."
 
+        type: string
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   linux:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         config:
-          - { name: Optimized, flags: --config=opt }
-          - { name: Debug, flags: --config=dbg, continuous-only: true }
-          - { name: ASAN, flags: --config=asan, runner: ubuntu-22-4core }
-          - { name: MSAN, flags: --config=docker-msan, runner: ubuntu-22-4core, continuous-only: true }
-          - { name: TSAN, flags: --config=tsan, runner: ubuntu-22-4core, continuous-only: true }
-          - { name: UBSAN, flags: --config=ubsan, runner: ubuntu-22-4core, continuous-only: true,}
-          - { name: No-RTTI, flags: --cxxopt=-fno-rtti, continuous-only: true }
+          - {name: Optimized, flags: --config=opt}
+          - {name: Debug, flags: --config=dbg, continuous-only: true}
+          - {name: ASAN, flags: --config=asan, runner: ubuntu-22-4core}
+          - {name: MSAN, flags: --config=docker-msan, runner: ubuntu-22-4core, continuous-only: true}
+          - {name: TSAN, flags: --config=tsan, runner: ubuntu-22-4core, continuous-only: true}
+          - {name: UBSAN, flags: --config=ubsan, runner: ubuntu-22-4core, continuous-only: true}
+          - {name: No-RTTI, flags: --cxxopt=-fno-rtti, continuous-only: true}
         include:
           # Set defaults
           - image: us-docker.pkg.dev/protobuf-build/containers/test/linux/sanitize@sha256:3d959f731dc5c54af4865c31ee2bd581ec40028adcdf4c038f3122581f595191
           - targets: //pkg/... //src/... @com_google_protobuf_examples//... //third_party/utf8_range/... //conformance:conformance_framework_tests
 
           # Override cases with custom images
-          - config: { name: "Bazel7", flags: --noenable_bzlmod }
+          - config: {name: "Bazel7", flags: --noenable_bzlmod}
             cache_key: Bazel7
             image: "us-docker.pkg.dev/protobuf-build/containers/common/linux/bazel:7.1.2-cf84e92285ca133b9c8104ad7b14d70e953cbb8e"
             targets: "//src/... //third_party/utf8_range/..."
-          - config: { name: "Bazel7 with Bzlmod", flags: --enable_bzlmod --enable_workspace }
+          - config: {name: "Bazel7 with Bzlmod", flags: --enable_bzlmod --enable_workspace}
             cache_key: Bazel7bzlmod
             image: "us-docker.pkg.dev/protobuf-build/containers/common/linux/bazel:7.1.2-cf84e92285ca133b9c8104ad7b14d70e953cbb8e"
             targets: "//src/... //third_party/utf8_range/..."
-          - config: { name: "TCMalloc" }
+          - config: {name: "TCMalloc"}
             cache_key: TcMalloc
             image: "us-docker.pkg.dev/protobuf-build/containers/test/linux/tcmalloc@sha256:1c5133455481f4d1bb8afa477029604f41f1a3c46cebe4d9958cf1af95b5c87c"
             targets: "//src/... //third_party/utf8_range/..."
-          - config: { name: "aarch64" }
+          - config: {name: "aarch64"}
             cache_key: TcMalloc
             targets: "//src/... //src/google/protobuf/compiler:protoc_aarch64_test //third_party/utf8_range/..."
             image: "us-docker.pkg.dev/protobuf-build/containers/test/linux/emulation:6.3.0-aarch64-68e662b3a56b881804dc4e9d45f949791cbc4b94"
     name: ${{ matrix.config.continuous-only && inputs.continuous-prefix || '' }} Linux ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.runner || 'ubuntu-latest' }}
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.config.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -70,19 +79,22 @@ jobs:
         uses: protocolbuffers/protobuf-ci/bazel-docker@v3
         with:
           image: ${{ matrix.image }}
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: cpp_linux/${{ matrix.cache_key }}
           bazel: test ${{ matrix.targets }} ${{ matrix.config.flags }}
           exclude-targets: ${{ matrix.exclude-targets }}
 
   linux-gcc:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         version: ['9.5', '13.1']
     name: Linux GCC ${{ matrix.version }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -91,18 +103,21 @@ jobs:
         uses: protocolbuffers/protobuf-ci/bazel-docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/gcc:${{ matrix.version }}-6.3.0-63dd26c0c7a808d92673a3e52e848189d4ab0f17
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: cpp_linux/gcc-${{ matrix.version }}
           bazel: test //pkg/... //src/... @com_google_protobuf_examples//... //third_party/utf8_range/... //conformance:conformance_framework_tests
 
   linux-release:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         arch: [x86_64, aarch64]
     name: Linux Release ${{ matrix.arch}}
     runs-on: ubuntu-20-4core
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -113,18 +128,18 @@ jobs:
         uses: protocolbuffers/protobuf-ci/cross-compile-protoc@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/common/linux/bazel:6.3.0-91a0ac83e968068672bc6001a4d474cfd9a50f1d
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           architecture: linux-${{ matrix.arch }}
       - name: Setup sccache
         uses: protocolbuffers/protobuf-ci/sccache@v3
         with:
           cache-prefix: linux-release-${{ matrix.arch }}
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
       - name: Run tests
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/emulation:${{ matrix.arch }}-384d5abe83a791c6b1ce04f5d7bc0b1f84a30d38
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           entrypoint: bash
           command: >
             -c "set -ex;
@@ -135,10 +150,9 @@ jobs:
             cmake --build . --parallel 20;
             ctest --parallel 20;
             sccache -s"
-
   linux-cmake:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         include:
           - flags: -Dprotobuf_BUILD_EXAMPLES=ON -DCMAKE_CXX_STANDARD=14
@@ -157,6 +171,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} Linux CMake ${{ matrix.name}}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -168,23 +185,25 @@ jobs:
         uses: protocolbuffers/protobuf-ci/sccache@v3
         with:
           cache-prefix: linux-cmake
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
 
       - name: Run tests
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/cmake:3.13.3-63dd26c0c7a808d92673a3e52e848189d4ab0f17
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: >-
             /test.sh ${{ matrix.flags}} ${{ env.SCCACHE_CMAKE_FLAGS }}
             -Dprotobuf_BUILD_TESTS=ON -Dprotobuf_USE_EXTERNAL_GTEST=ON
             -Dprotobuf_ABSL_PROVIDER=package
-
   linux-cmake-install:
     name: Linux CMake Install
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -195,13 +214,13 @@ jobs:
         uses: protocolbuffers/protobuf-ci/sccache@v3
         with:
           cache-prefix: linux-cmake-install
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
 
       - name: Run tests
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/cmake:3.13.3-63dd26c0c7a808d92673a3e52e848189d4ab0f17
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: >-
             /install.sh -DCMAKE_CXX_STANDARD=14 ${{ env.SCCACHE_CMAKE_FLAGS }}
             -Dprotobuf_USE_EXTERNAL_GTEST=ON -Dprotobuf_ABSL_PROVIDER=package
@@ -213,13 +232,15 @@ jobs:
             -Dprotobuf_BUILD_CONFORMANCE=ON
             -DCMAKE_CXX_STANDARD=14
             -Dprotobuf_USE_EXTERNAL_GTEST=ON -Dprotobuf_ABSL_PROVIDER=package
-
   linux-cmake-examples:
     name: Linux CMake Examples
     # Skip this test on presubmit
     if: ${{ inputs.continuous-run }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -229,13 +250,13 @@ jobs:
         uses: protocolbuffers/protobuf-ci/sccache@v3
         with:
           cache-prefix: linux-cmake-examples
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
 
       - name: Run tests
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/cmake:3.13.3-63dd26c0c7a808d92673a3e52e848189d4ab0f17
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: >-
             /install.sh -DCMAKE_CXX_STANDARD=14 ${{ env.SCCACHE_CMAKE_FLAGS }}
             -Dprotobuf_USE_EXTERNAL_GTEST=ON -Dprotobuf_ABSL_PROVIDER=package
@@ -244,10 +265,9 @@ jobs:
             cd examples/build \&\&
             cmake .. -DCMAKE_CXX_STANDARD=14 \&\&
             cmake --build .
-
   linux-cmake-gcc:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         include:
           - name: C++14
@@ -261,6 +281,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} Linux CMake GCC ${{ matrix.name }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -273,14 +296,14 @@ jobs:
         uses: protocolbuffers/protobuf-ci/sccache@v3
         with:
           cache-prefix: linux-cmake-gcc
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
 
       - name: Run tests
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/gcc:12.2-6.3.0-63dd26c0c7a808d92673a3e52e848189d4ab0f17
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           entrypoint: bash
           command: >-
               -c 'set -ex;
@@ -290,11 +313,13 @@ jobs:
               cmake --build . --parallel 20;
               ctest --verbose --parallel 20;
               sccache -s'
-
   linux-cmake-submodules:
     name: Linux CMake Submodules
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -305,21 +330,23 @@ jobs:
         uses: protocolbuffers/protobuf-ci/sccache@v3
         with:
           cache-prefix: linux-cmake-submodules
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
 
       - name: Run tests
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/cmake:3.13.3-63dd26c0c7a808d92673a3e52e848189d4ab0f17
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: >-
             /test.sh ${{ env.SCCACHE_CMAKE_FLAGS }}
             -Dprotobuf_BUILD_CONFORMANCE=ON -Dprotobuf_BUILD_EXAMPLES=ON -DCMAKE_CXX_STANDARD=14
-
   linux-cmake-32-bit:
     name: Linux CMake 32-bit
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -330,14 +357,14 @@ jobs:
         uses: protocolbuffers/protobuf-ci/sccache@v3
         with:
           cache-prefix: linux-cmake-32-bit
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
 
       - name: Run tests
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/32bit@sha256:8275360dc5d676f3470872d79087901c0e4153453976bea908a92c82e8d209ea
           platform: linux/386
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: >-
               /bin/bash -cex '
               cd /workspace;
@@ -346,10 +373,9 @@ jobs:
               cmake --build . --parallel 20;
               ctest --verbose --parallel 20;
               sccache -s'
-
   non-linux:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         include:
           - name: MacOS Bazel
@@ -381,6 +407,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -390,14 +419,14 @@ jobs:
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/bazel@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel: ${{ matrix.bazel }}
           bazel-cache: cpp_${{ matrix.cache_key }}
           version: ${{ matrix.bazel_version || '6.3.0' }}
 
   non-linux-cmake:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         include:
           # TODO: investigate and fix
@@ -453,6 +482,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ runner.os == 'Windows' && (!matrix.continuous-only || inputs.continuous-run) }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -466,14 +498,10 @@ jobs:
         with:
           arch: ${{ matrix.windows-arch || 'x64' }}
           vsversion: ${{ matrix.vsversion }}
-
-      # Workaround for Abseil incompatibility with CMake 3.30 (b/352354235).
       - name: Downgrade CMake
         if: ${{ runner.os == 'Windows' && (!matrix.continuous-only || inputs.continuous-run)}}
         run: choco install cmake --version 3.29.6 --force
         shell: bash
-
-      # Workaround for incompatibility between gcloud and windows-2019 runners.
       - name: Install Python
         if: ${{ matrix.python-version && (!matrix.continuous-only || inputs.continuous-run) }}
         uses: actions/setup-python@61a6322f88396a6271a6ee3565807d608ecaddd1 # v4.7.0
@@ -489,14 +517,12 @@ jobs:
         uses: protocolbuffers/protobuf-ci/sccache@v3
         with:
           cache-prefix: ${{ matrix.cache-prefix }}
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
-
-      # Install phase.
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
       - name: Configure CMake for install
         if: ${{ matrix.install-flags && (!matrix.continuous-only || inputs.continuous-run) }}
         uses: protocolbuffers/protobuf-ci/bash@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: cmake . ${{ matrix.install-flags }} ${{ env.SCCACHE_CMAKE_FLAGS }} -Dprotobuf_ALLOW_CCACHE=ON
       - name: Build for install
         if: ${{ matrix.install-flags && (!matrix.continuous-only || inputs.continuous-run) }}
@@ -519,8 +545,8 @@ jobs:
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/bash@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
-          command: cmake . ${{ matrix.flags }} ${{ env.SCCACHE_CMAKE_FLAGS }} -Dprotobuf_ALLOW_CCACHE=ON 
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
+          command: cmake . ${{ matrix.flags }} ${{ env.SCCACHE_CMAKE_FLAGS }} -Dprotobuf_ALLOW_CCACHE=ON
 
       - name: Build
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}

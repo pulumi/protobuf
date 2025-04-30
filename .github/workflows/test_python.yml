@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: Python Tests
 
 on:
@@ -5,8 +11,8 @@ on:
     inputs:
       continuous-run:
         required: true
-        description: "Boolean string denoting whether this run is continuous --
-          empty string for presubmit, non-empty string for continuous."
+        description: "Boolean string denoting whether this run is continuous -- empty string for presubmit, non-empty string for continuous."
+
         type: string
       safe-checkout:
         required: true
@@ -14,20 +20,20 @@ on:
         type: string
       continuous-prefix:
         required: true
-        description: "The string continuous-only tests should be prefixed with when displaying test
-          results."
-        type: string
+        description: "The string continuous-only tests should be prefixed with when displaying test results."
 
+        type: string
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   linux:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
-        type: [ Pure, C++]
+        type: [Pure, C++]
         # TODO: b/309627662 - Add coverage for Python 3.12.
         version: ["3.8", "3.9", "3.10", "3.11"]
         include:
@@ -53,6 +59,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} Linux ${{ matrix.type }} ${{ matrix.version }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -63,19 +72,18 @@ jobs:
         uses: protocolbuffers/protobuf-ci/bazel-docker@v3
         with:
           image: ${{ matrix.image || format('us-docker.pkg.dev/protobuf-build/containers/test/linux/python:{0}-63dd26c0c7a808d92673a3e52e848189d4ab0f17', matrix.version) }}
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: python_linux/${{ matrix.type }}_${{ matrix.version }}
           bazel: test ${{ matrix.targets }} ${{ matrix.flags }} --test_env=KOKORO_PYTHON_VERSION
           exclude-targets: -//python/pb_unit_tests/...
 
-
   macos:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
-        type: [ Pure, C++]
+        type: [Pure, C++]
         # TODO Consider expanding this set of versions.
-        version: [ "3.12" ]
+        version: ["3.12"]
         include:
           - type: Pure
             targets: //python/... //python:python_version_test
@@ -86,6 +94,9 @@ jobs:
     name: MacOS ${{ matrix.type }} ${{ matrix.version }}
     runs-on: macos-12
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -111,7 +122,7 @@ jobs:
         env:
           KOKORO_PYTHON_VERSION: ${{ matrix.version }}
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: python_macos/${{ matrix.type }}_${{ matrix.version }}
           bazel: >-
             test ${{ matrix.targets }} ${{ matrix.flags }}

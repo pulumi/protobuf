@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: Bazel Tests
 
 on:
@@ -5,8 +11,8 @@ on:
     inputs:
       continuous-run:
         required: true
-        description: "Boolean string denoting whether this run is continuous --
-          empty string for presubmit, non-empty string for continuous."
+        description: "Boolean string denoting whether this run is continuous -- empty string for presubmit, non-empty string for continuous."
+
         type: string
       safe-checkout:
         required: true
@@ -14,21 +20,22 @@ on:
         type: string
       continuous-prefix:
         required: true
-        description: "The string continuous-only tests should be prefixed with when displaying test
-        results."
+        description: "The string continuous-only tests should be prefixed with when displaying test results."
+
         type: string
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   examples:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ ubuntu, windows, macos ]
-        bazelversion: [ '7.1.2' ]
-        bzlmod: [true, false ]
+        runner: [ubuntu, windows, macos]
+        bazelversion: ['7.1.2']
+        bzlmod: [true, false]
         include:
           - runner: ubuntu
             bazelversion: '6.4.0'
@@ -38,6 +45,9 @@ jobs:
     runs-on: ${{ matrix.runner }}-latest
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} Examples ${{ matrix.runner }} ${{ matrix.bazelversion }}${{ matrix.bzlmod && ' (bzlmod)' || '' }}
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -60,7 +70,7 @@ jobs:
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/bazel@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: examples
           version: ${{ matrix.bazelversion }}
           bash: cd examples && bazel build //... $BAZEL_FLAGS --enable_bzlmod=${{ matrix.bzlmod }}

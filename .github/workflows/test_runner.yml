@@ -47,10 +47,10 @@ on:
     types: [labeled, opened, reopened, synchronize]
 
   # manual
-  workflow_dispatch:
- 
+  workflow_dispatch: null
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: ${{ github.event_name }}-${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -95,13 +95,11 @@ jobs:
           (echo "This pull request is from an unsafe fork and hasn't been approved to run tests." &&
            echo "A protobuf team member will need to review the PR and add the 'safe for tests' tag." &&
            exit 1)
-
       - name: Cache safe commit
         id: safe-checkout
         run: >
           ${{ github.event_name != 'pull_request_target' }} ||
           echo "sha=${{ github.event.pull_request.head.sha  }}"  >> $GITHUB_OUTPUT
-
       - name: Set Test Type Variables
         id: set-test-type-vars
         run: |

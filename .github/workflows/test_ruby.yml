@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: Ruby Tests
 
 on:
@@ -5,8 +11,8 @@ on:
     inputs:
       continuous-run:
         required: true
-        description: "Boolean string denoting whether this run is continuous --
-          empty string for presubmit, non-empty string for continuous."
+        description: "Boolean string denoting whether this run is continuous -- empty string for presubmit, non-empty string for continuous."
+
         type: string
       safe-checkout:
         required: true
@@ -14,13 +20,13 @@ on:
         type: string
       continuous-prefix:
         required: true
-        description: "The string continuous-only tests should be prefixed with when displaying test
-          results."
-        type: string
+        description: "The string continuous-only tests should be prefixed with when displaying test results."
 
+        type: string
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   linux:
@@ -30,18 +36,21 @@ jobs:
         include:
           # Test both FFI and Native implementations on the highest and lowest
           # Ruby versions for CRuby and JRuby, but only on Bazel 5.x.
-          - { name: Ruby 3.0, ruby: ruby-3.0.2, ffi: NATIVE }
-          - { name: Ruby 3.0, ruby: ruby-3.0.2, ffi: FFI, continuous-only: true }
-          - { name: Ruby 3.1, ruby: ruby-3.1.0, continuous-only: true }
-          - { name: Ruby 3.2, ruby: ruby-3.2.0, continuous-only: true }
-          - { name: Ruby 3.3, ruby: ruby-3.3.0, ffi: NATIVE }
-          - { name: Ruby 3.3, ruby: ruby-3.3.0, ffi: FFI }
-          - { name: JRuby 9.4, ruby: jruby-9.4.6.0, ffi: NATIVE }
-          - { name: JRuby 9.4, ruby: jruby-9.4.6.0, ffi: FFI }
+          - {name: Ruby 3.0, ruby: ruby-3.0.2, ffi: NATIVE}
+          - {name: Ruby 3.0, ruby: ruby-3.0.2, ffi: FFI, continuous-only: true}
+          - {name: Ruby 3.1, ruby: ruby-3.1.0, continuous-only: true}
+          - {name: Ruby 3.2, ruby: ruby-3.2.0, continuous-only: true}
+          - {name: Ruby 3.3, ruby: ruby-3.3.0, ffi: NATIVE}
+          - {name: Ruby 3.3, ruby: ruby-3.3.0, ffi: FFI}
+          - {name: JRuby 9.4, ruby: jruby-9.4.6.0, ffi: NATIVE}
+          - {name: JRuby 9.4, ruby: jruby-9.4.6.0, ffi: FFI}
 
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} Linux ${{ matrix.name }} ${{ matrix.ffi == 'FFI' && ' FFI' || '' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -52,22 +61,25 @@ jobs:
         uses: protocolbuffers/protobuf-ci/bazel-docker@v3
         with:
           image: ${{ matrix.image || format('us-docker.pkg.dev/protobuf-build/containers/test/linux/ruby:{0}-6.3.0-9848710ff1370795ee7517570a20b81e140112ec', matrix.ruby) }}
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: ruby_linux/${{ matrix.ruby }}_${{ matrix.bazel }}
           bazel: test //ruby/... //ruby/tests:ruby_version --test_env=KOKORO_RUBY_VERSION --test_env=BAZEL=true ${{ matrix.ffi == 'FFI' && '--//ruby:ffi=enabled --test_env=PROTOCOL_BUFFERS_RUBY_IMPLEMENTATION=FFI' || '' }}
-# Useful tool for troubleshooting, but the action introduces flakes as well,
-# e.g. https://github.com/actions/upload-artifact/issues/569
-#      - name: Archive log artifacts
-#        if: ${{ matrix.presubmit || inputs.test-type == 'continuous' }}
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: test-logs-${{ matrix.ruby }}_${{ matrix.ffi || 'NATIVE' }}
-#          path: logs
+  # Useful tool for troubleshooting, but the action introduces flakes as well,
+  # e.g. https://github.com/actions/upload-artifact/issues/569
+  #      - name: Archive log artifacts
+  #        if: ${{ matrix.presubmit || inputs.test-type == 'continuous' }}
+  #        uses: actions/upload-artifact@v4
+  #        with:
+  #          name: test-logs-${{ matrix.ruby }}_${{ matrix.ffi || 'NATIVE' }}
+  #          path: logs
 
   linux-32bit:
     name: Linux 32-bit
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -78,14 +90,14 @@ jobs:
         uses: protocolbuffers/protobuf-ci/cross-compile-protoc@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/common/linux/bazel:6.3.0-91a0ac83e968068672bc6001a4d474cfd9a50f1d
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           architecture: linux-i386
 
       - name: Run tests
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: i386/ruby:3.0.2-buster
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: >-
             /bin/bash -cex '
             gem install bundler -v 2.5.6;
@@ -94,11 +106,13 @@ jobs:
             PROTOC=/workspace/${{ steps.cross-compile.outputs.protoc }} rake;
             rake clobber_package gem;
             PROTOC=/workspace/${{ steps.cross-compile.outputs.protoc }} rake test'
-
   linux-aarch64:
     name: Linux aarch64
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -109,14 +123,14 @@ jobs:
         uses: protocolbuffers/protobuf-ci/cross-compile-protoc@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/common/linux/bazel:6.3.0-91a0ac83e968068672bc6001a4d474cfd9a50f1d
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           architecture: linux-aarch64
 
       - name: Run tests
         uses: protocolbuffers/protobuf-ci/docker@v3
         with:
           image: arm64v8/ruby:3.0.2-buster
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           command: >-
             /bin/bash -cex '
             gem install bundler -v 2.5.6;
@@ -125,25 +139,27 @@ jobs:
             PROTOC=/workspace/${{ steps.cross-compile.outputs.protoc }} rake;
             rake clobber_package gem;
             PROTOC=/workspace/${{ steps.cross-compile.outputs.protoc }} rake test'
-
   macos:
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
       matrix:
         include:
         # Test both FFI and Native implementations on the highest and lowest
         # Ruby versions for CRuby, but only on Bazel 5.x.
         # Quote versions numbers otherwise 3.0 will render as 3
-        - { version: "3.0", ffi: NATIVE }
-        - { version: "3.0", ffi: FFI, continuous-only: true }
-        - { version: "3.1", continuous-only: true }
-        - { version: "3.2", continuous-only: true }
-        - { version: "3.3", ffi: NATIVE }
-        - { version: "3.3", ffi: FFI }
+        - {version: "3.0", ffi: NATIVE}
+        - {version: "3.0", ffi: FFI, continuous-only: true}
+        - {version: "3.1", continuous-only: true}
+        - {version: "3.2", continuous-only: true}
+        - {version: "3.3", ffi: NATIVE}
+        - {version: "3.3", ffi: FFI}
 
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} MacOS Ruby ${{ matrix.version }}${{ matrix.ffi == 'FFI' && ' FFI' || '' }}
     runs-on: macos-12
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
@@ -164,7 +180,7 @@ jobs:
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         uses: protocolbuffers/protobuf-ci/bazel@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: ruby_macos/${{ matrix.version }}
           bazel: test //ruby/... --test_env=KOKORO_RUBY_VERSION=${{ matrix.version }} --test_env=BAZEL=true ${{ matrix.ffi == 'FFI' && '--//ruby:ffi=enabled --test_env=PROTOCOL_BUFFERS_RUBY_IMPLEMENTATION=FFI' || '' }}
 
@@ -175,19 +191,22 @@ jobs:
         include:
           # Test both FFI and Native implementations on the highest and lowest
           # Ruby versions for CRuby and JRuby, but only on Bazel 5.x.
-          - { name: Ruby 3.0, ruby: ruby-3.0.2, ffi: NATIVE}
-          - { name: Ruby 3.0, ruby: ruby-3.0.2, ffi: FFI}
-          - { name: Ruby 3.1, ruby: ruby-3.1.0}
-          - { name: Ruby 3.2, ruby: ruby-3.2.0}
-          - { name: Ruby 3.3, ruby: ruby-3.3.0, ffi: NATIVE }
-          - { name: Ruby 3.3, ruby: ruby-3.3.0, ffi: FFI }
-          - { name: JRuby 9.4, ruby: jruby-9.4.6.0, ffi: NATIVE }
-          - { name: JRuby 9.4, ruby: jruby-9.4.6.0, ffi: FFI }
+          - {name: Ruby 3.0, ruby: ruby-3.0.2, ffi: NATIVE}
+          - {name: Ruby 3.0, ruby: ruby-3.0.2, ffi: FFI}
+          - {name: Ruby 3.1, ruby: ruby-3.1.0}
+          - {name: Ruby 3.2, ruby: ruby-3.2.0}
+          - {name: Ruby 3.3, ruby: ruby-3.3.0, ffi: NATIVE}
+          - {name: Ruby 3.3, ruby: ruby-3.3.0, ffi: FFI}
+          - {name: JRuby 9.4, ruby: jruby-9.4.6.0, ffi: NATIVE}
+          - {name: JRuby 9.4, ruby: jruby-9.4.6.0, ffi: FFI}
     name: (Continuous) Install ${{ matrix.name }}${{ matrix.ffi == 'FFI' && ' FFI' || '' }}
     # None of these ruby gem tests should be run on presubmit
     if: ${{ inputs.continuous-run }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -196,7 +215,7 @@ jobs:
         uses: protocolbuffers/protobuf-ci/bazel-docker@v3
         with:
           image: us-docker.pkg.dev/protobuf-build/containers/test/linux/ruby:${{ matrix.ruby }}-6.3.0-9848710ff1370795ee7517570a20b81e140112ec
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: ruby_install/${{ matrix.ruby }}_${{ matrix.bazel }}
           bash: >
             bazel --version;

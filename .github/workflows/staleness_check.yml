@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: Staleness tests
 
 on:
@@ -8,23 +14,22 @@ on:
     inputs:
       continuous-run:
         required: true
-        description: "Boolean string denoting whether this run is continuous --
-          empty string for presubmit, non-empty string for continuous."
+        description: "Boolean string denoting whether this run is continuous -- empty string for presubmit, non-empty string for continuous."
+
         type: string
       safe-checkout:
         required: false
         description: "The SHA key for the commit we want to run over"
         type: string
-  workflow_dispatch:
-
-permissions: {}
+  workflow_dispatch: null
+permissions: {id-token: write}
 jobs:
   test:
     strategy:
       fail-fast: false
       matrix:
         branch: [main, 25.x, 27.x, 28.x]
-        os: [{ name: Linux, value: ubuntu-latest}]
+        os: [{name: Linux, value: ubuntu-latest}]
         exclude:
           # If we are in a presubmit run, only test main
           - branch: ${{ !inputs.continuous-run && '25.x' }}
@@ -35,6 +40,9 @@ jobs:
     runs-on: ${{ matrix.os.value }}
     if: ${{ github.event.repository.full_name == 'protocolbuffers/protobuf' }}
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout ${{ github.head_ref && 'PR' || matrix.branch }}
         uses: protocolbuffers/protobuf-ci/checkout@v3
         with:
@@ -61,7 +69,7 @@ jobs:
         # commit.
         uses: protocolbuffers/protobuf-ci/bazel@v3
         with:
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: staleness
           bash: >
             set -ex;

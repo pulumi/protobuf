@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: Update protobuf-php Repo
 
 on:
@@ -7,18 +13,22 @@ on:
       - v[0-9]+.[0-9]+-rc[0-9]+
 
 permissions:
-  contents: read  #  to fetch code in 'Clone protobuf' (actions/checkout)
+  contents: read #  to fetch code in 'Clone protobuf' (actions/checkout)
+  id-token: write
 
 jobs:
   update-repo:
     name: Update PHP Repo
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout protobuf-php
         uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           repository: protocolbuffers/protobuf-php
-          token: ${{ secrets.BOT_ACCESS_TOKEN }}
+          token: ${{ steps.esc-secrets.outputs.BOT_ACCESS_TOKEN }}
       - name: Clone protobuf
         uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:

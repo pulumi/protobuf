@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: Java Tests
 
 on:
@@ -5,8 +11,8 @@ on:
     inputs:
       continuous-run:
         required: true
-        description: "Boolean string denoting whether this run is continuous --
-          empty string for presubmit, non-empty string for continuous."
+        description: "Boolean string denoting whether this run is continuous -- empty string for presubmit, non-empty string for continuous."
+
         type: string
       safe-checkout:
         required: true
@@ -14,13 +20,13 @@ on:
         type: string
       continuous-prefix:
         required: true
-        description: "The string continuous-only tests should be prefixed with when displaying test
-          results."
-        type: string
+        description: "The string continuous-only tests should be prefixed with when displaying test results."
 
+        type: string
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   linux:
@@ -62,6 +68,9 @@ jobs:
     name: ${{ matrix.continuous-only && inputs.continuous-prefix || '' }} Linux ${{ matrix.name }}
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - name: Checkout pending changes
         uses: protocolbuffers/protobuf-ci/checkout@v3
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
@@ -72,11 +81,11 @@ jobs:
         if: ${{ !matrix.continuous-only || inputs.continuous-run }}
         with:
           image: ${{ matrix.image }}
-          credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+          credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
           bazel-cache: java_linux/${{ matrix.cache_key }}
           bazel: test ${{ matrix.targets }} ${{ matrix.flags }} --test_env=KOKORO_JAVA_VERSION
 
-# TODO restore this test (or a better one) when gRPC has rebuilt with 26.x
+  # TODO restore this test (or a better one) when gRPC has rebuilt with 26.x
   # linkage-monitor:
   #   name: Linux Linkage Monitor
   #   runs-on: ubuntu-latest
@@ -99,6 +108,9 @@ jobs:
     name: Protobuf Maven BOM
     runs-on: ubuntu-latest
     steps:
+    - name: Fetch secrets from ESC
+      id: esc-secrets
+      uses: pulumi/esc-action@v1
     - name: Checkout pending changes
       uses: protocolbuffers/protobuf-ci/checkout@v3
       with:
@@ -107,7 +119,7 @@ jobs:
       uses: protocolbuffers/protobuf-ci/bazel-docker@v3
       with:
         image: us-docker.pkg.dev/protobuf-build/containers/test/linux/java:11-1fdbb997433cb22c1e49ef75ad374a8d6bb88702
-        credentials: ${{ secrets.GAR_SERVICE_ACCOUNT }}
+        credentials: ${{ steps.esc-secrets.outputs.GAR_SERVICE_ACCOUNT }}
         bazel-cache: java_linux/11
         bash: |
           set -ex

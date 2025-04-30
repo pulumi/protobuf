@@ -1,3 +1,9 @@
+env:
+  ESC_ACTION_OIDC_AUTH: true
+  ESC_ACTION_OIDC_ORGANIZATION: pulumi
+  ESC_ACTION_OIDC_REQUESTED_TOKEN_TYPE: urn:pulumi:token-type:access_token:organization
+  ESC_ACTION_ENVIRONMENT: imports/github-secrets
+  ESC_ACTION_EXPORT_ENVIRONMENT_VARIABLES: false
 name: Auto-generate stale checked-in files
 
 on:
@@ -8,27 +14,29 @@ on:
       # The 21.x branch predates support for auto-generation, so we make sure
       # to exclude it.
       - '!21.x'
-  workflow_dispatch:
-
-permissions: {}
+  workflow_dispatch: null
+permissions: {id-token: write}
 jobs:
   run:
     permissions:
-      contents: write  #  for git push
+      contents: write #  for git push
 
     if: github.repository == 'protocolbuffers/protobuf'
     runs-on: ubuntu-latest
     name: Refresh stale files
 
     strategy:
-      fail-fast: false   # Don't cancel all jobs if one fails.
+      fail-fast: false # Don't cancel all jobs if one fails.
 
     steps:
+      - name: Fetch secrets from ESC
+        id: esc-secrets
+        uses: pulumi/esc-action@v1
       - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
         with:
           # Note: this token has an expiration date, so if the workflow starts
           # failing then you may need to generate a fresh token.
-          token: ${{ secrets.BOT_ACCESS_TOKEN }}
+          token: ${{ steps.esc-secrets.outputs.BOT_ACCESS_TOKEN }}
       - name: Configure name and email address in Git
         run: cd ${{ github.workspace }} && git config user.name "Protobuf Team Bot" && git config user.email "protobuf-team-bot@google.com"
       - name: Commit and push update
